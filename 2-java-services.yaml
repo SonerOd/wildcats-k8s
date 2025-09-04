@@ -1,105 +1,48 @@
-# DUMMY ACCOUNT SERVICE
+# ============= ACCOUNT (8081) =============
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: wildcats-account
   namespace: appdynamics-demo
+  labels: { app: wildcats-account }
 spec:
   replicas: 2
   selector:
-    matchLabels:
-      app: wildcats-account
+    matchLabels: { app: wildcats-account }
   template:
     metadata:
-      labels:
-        app: wildcats-account
+      labels: { app: wildcats-account }
     spec:
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 1001
       containers:
         - name: app
-          image: openjdk:11-jdk
-          securityContext:
-            runAsUser: 0
-            runAsGroup: 0
-          command: ["/bin/sh"]
-          args:
-            - -c
-            - |
-              cat > DummyAccountService.java << 'EOF'
-              import java.util.*;
-              import java.net.*;
-              import java.io.*;
-              import com.sun.net.httpserver.*;
-              
-              public class DummyAccountService {
-                  public static void main(String[] args) throws Exception {
-                      System.out.println("Starting Account Service...");
-                      Thread.sleep(30000); // AppDynamics agent mount için bekle
-              
-                      HttpServer server = HttpServer.create(new InetSocketAddress(8081), 0);
-                      server.createContext("/api/accounts/create", (exchange -> {
-                          
-                           try {
-                              URL url = new URL("http://wildcats-credit-check:8082/api/credit/check");
-                              HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                              conn.setRequestMethod("POST");
-                              conn.getResponseCode();
-                              conn.disconnect();
-                          } catch(Exception e) {
-                              System.out.println("Failed to call transaction service: " + e.getMessage());
-                          }
-                          
-                          String response = "{\"id\":\"" + UUID.randomUUID() + "\",\"status\":\"created\"}";
-                          exchange.getResponseHeaders().add("Content-Type", "application/json");
-                          exchange.sendResponseHeaders(200, response.length());
-                          exchange.getResponseBody().write(response.getBytes());
-                          exchange.close();
-                      }));
-                      server.createContext("/health", (exchange -> {
-                          exchange.getResponseHeaders().add("Content-Type", "text/plain");
-                          exchange.sendResponseHeaders(200, 2);
-                          exchange.getResponseBody().write("OK".getBytes());
-                          exchange.close();
-                      }));
-                      server.createContext("/actuator/health", (exchange -> {
-                          String response = "{\"status\":\"UP\"}";
-                          exchange.getResponseHeaders().add("Content-Type", "application/json");
-                          exchange.sendResponseHeaders(200, response.length());
-                          exchange.getResponseBody().write(response.getBytes());
-                          exchange.close();
-                      }));
-                      server.start();
-                      System.out.println("Account Service running on 8081");
-              
-                      // Keep alive
-                      while(true) {
-                          Thread.sleep(10000);
-                      }
-                  }
-              }
-              EOF
-              javac DummyAccountService.java
-              java -Xms256m -Xmx512m DummyAccountService
+          image: odztech/wildcats-account:1.0.0
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8081
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8081
-            initialDelaySeconds: 60
-            periodSeconds: 30
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8081
-            initialDelaySeconds: 45
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:MaxRAMPercentage=75.0 -XX:+UseContainerSupport -XX:+UseG1GC"
+          startupProbe:
+            httpGet: { path: /actuator/health, port: 8081 }
+            initialDelaySeconds: 20
             periodSeconds: 10
+            failureThreshold: 18   # ~3 dakika warmup toleransı
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8081 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 6
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8081 }
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            failureThreshold: 3
           resources:
-            limits:
-              memory: "1Gi"
-              cpu: "1000m"
-            requests:
-              memory: "512Mi"
-              cpu: "200m"
+            requests: { cpu: "200m", memory: "512Mi" }
+            limits:   { cpu: "1000m", memory: "1Gi" }
 ---
 apiVersion: v1
 kind: Service
@@ -107,338 +50,54 @@ metadata:
   name: wildcats-account
   namespace: appdynamics-demo
 spec:
-  selector:
-    app: wildcats-account
+  selector: { app: wildcats-account }
   ports:
     - port: 8081
+      targetPort: 8081
 ---
-# TRANSACTION SERVICE
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: wildcats-transaction
-  namespace: appdynamics-demo
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: wildcats-transaction
-  template:
-    metadata:
-      labels:
-        app: wildcats-transaction
-    spec:
-      containers:
-        - name: app
-          image: openjdk:11-jdk
-          securityContext:
-            runAsUser: 0
-            runAsGroup: 0
-          command: ["/bin/sh"]
-          args:
-            - -c
-            - |
-              cat > TransactionService.java << 'EOF'
-              import java.util.*;
-              import java.net.*;
-              import java.io.*;
-              import com.sun.net.httpserver.*;
-              
-              public class TransactionService {
-                  public static void main(String[] args) throws Exception {
-                      System.out.println("Starting Transaction Service...");
-                      Thread.sleep(30000); // AppDynamics agent mount için bekle
-              
-                      HttpServer server = HttpServer.create(new InetSocketAddress(8084), 0);
-                      server.createContext("/api/transactions/create", (exchange -> {
-                          String response = "{\"id\":\"" + UUID.randomUUID() + "\",\"status\":\"pending\",\"amount\":" + (Math.random()*10000) + "}";
-                          exchange.getResponseHeaders().add("Content-Type", "application/json");
-                          exchange.sendResponseHeaders(200, response.length());
-                          exchange.getResponseBody().write(response.getBytes());
-                          exchange.close();
-                      }));
-                      server.createContext("/api/transactions/list", (exchange -> {
-                          String response = "[{\"id\":\"tx1\",\"amount\":1000},{\"id\":\"tx2\",\"amount\":2000}]";
-                          exchange.getResponseHeaders().add("Content-Type", "application/json");
-                          exchange.sendResponseHeaders(200, response.length());
-                          exchange.getResponseBody().write(response.getBytes());
-                          exchange.close();
-                      }));
-                      server.createContext("/health", (exchange -> {
-                          exchange.getResponseHeaders().add("Content-Type", "text/plain");
-                          exchange.sendResponseHeaders(200, 2);
-                          exchange.getResponseBody().write("OK".getBytes());
-                          exchange.close();
-                      }));
-                      server.createContext("/actuator/health", (exchange -> {
-                          String response = "{\"status\":\"UP\"}";
-                          exchange.getResponseHeaders().add("Content-Type", "application/json");
-                          exchange.sendResponseHeaders(200, response.length());
-                          exchange.getResponseBody().write(response.getBytes());
-                          exchange.close();
-                      }));
-                      server.start();
-                      System.out.println("Transaction Service running on 8084");
-              
-                      // Keep alive
-                      while(true) {
-                          Thread.sleep(10000);
-                      }
-                  }
-              }
-              EOF
-              javac TransactionService.java
-              java -Xms256m -Xmx512m TransactionService
-          ports:
-            - containerPort: 8084
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8084
-            initialDelaySeconds: 60
-            periodSeconds: 30
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8084
-            initialDelaySeconds: 45
-            periodSeconds: 10
-          resources:
-            limits:
-              memory: "1Gi"
-              cpu: "1000m"
-            requests:
-              memory: "512Mi"
-              cpu: "200m"
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: wildcats-transaction
-  namespace: appdynamics-demo
-spec:
-  selector:
-    app: wildcats-transaction
-  ports:
-    - port: 8084
----
-# LOAN SERVICE
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: wildcats-loan
-  namespace: appdynamics-demo
-spec:
-  replicas: 2
-  selector:
-    matchLabels:
-      app: wildcats-loan
-  template:
-    metadata:
-      labels:
-        app: wildcats-loan
-    spec:
-      containers:
-        - name: app
-          image: openjdk:11-jdk
-          securityContext:
-            runAsUser: 0
-            runAsGroup: 0
-          command: ["/bin/sh"]
-          args:
-            - -c
-            - |
-              cat > LoanService.java << 'EOF'
-              import java.util.*;
-              import java.net.*;
-              import java.io.*;
-              import com.sun.net.httpserver.*;
-              
-              public class LoanService {
-                  public static void main(String[] args) throws Exception {
-                      System.out.println("Starting Loan Service...");
-                      Thread.sleep(30000); // AppDynamics agent mount için bekle
-              
-                      HttpServer server = HttpServer.create(new InetSocketAddress(8083), 0);
-                      server.createContext("/api/loans/apply", (exchange -> {
-                          // Call transaction service
-                          try {
-                              URL url = new URL("http://wildcats-transaction:8084/api/transactions/create");
-                              HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                              conn.setRequestMethod("POST");
-                              conn.getResponseCode();
-                              conn.disconnect();
-                          } catch(Exception e) {
-                              System.out.println("Failed to call transaction service: " + e.getMessage());
-                          }
-              
-                          String response = "{\"loanId\":\"" + UUID.randomUUID() + "\",\"status\":\"processing\"}";
-                          exchange.getResponseHeaders().add("Content-Type", "application/json");
-                          exchange.sendResponseHeaders(200, response.length());
-                          exchange.getResponseBody().write(response.getBytes());
-                          exchange.close();
-                      }));
-                      server.createContext("/health", (exchange -> {
-                          exchange.getResponseHeaders().add("Content-Type", "text/plain");
-                          exchange.sendResponseHeaders(200, 2);
-                          exchange.getResponseBody().write("OK".getBytes());
-                          exchange.close();
-                      }));
-                      server.createContext("/actuator/health", (exchange -> {
-                          String response = "{\"status\":\"UP\"}";
-                          exchange.getResponseHeaders().add("Content-Type", "application/json");
-                          exchange.sendResponseHeaders(200, response.length());
-                          exchange.getResponseBody().write(response.getBytes());
-                          exchange.close();
-                      }));
-                      server.start();
-                      System.out.println("Loan Service running on 8083");
-              
-                      // Keep alive
-                      while(true) {
-                          Thread.sleep(10000);
-                      }
-                  }
-              }
-              EOF
-              javac LoanService.java
-              java -Xms256m -Xmx512m LoanService
-          ports:
-            - containerPort: 8083
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8083
-            initialDelaySeconds: 60
-            periodSeconds: 30
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8083
-            initialDelaySeconds: 45
-            periodSeconds: 10
-          resources:
-            limits:
-              memory: "1Gi"
-              cpu: "1000m"
-            requests:
-              memory: "512Mi"
-              cpu: "200m"
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: wildcats-loan
-  namespace: appdynamics-demo
-spec:
-  selector:
-    app: wildcats-loan
-  ports:
-    - port: 8083
----
-# CREDIT CHECK SERVICE
+# ============= CREDIT-CHECK (8082) =============
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: wildcats-credit-check
   namespace: appdynamics-demo
+  labels: { app: wildcats-credit-check }
 spec:
   replicas: 2
   selector:
-    matchLabels:
-      app: wildcats-credit-check
+    matchLabels: { app: wildcats-credit-check }
   template:
     metadata:
-      labels:
-        app: wildcats-credit-check
+      labels: { app: wildcats-credit-check }
     spec:
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 1001
       containers:
         - name: app
-          image: openjdk:11-jdk
-          securityContext:
-            runAsUser: 0
-            runAsGroup: 0
-          command: ["/bin/sh"]
-          args:
-            - -c
-            - |
-              cat > CreditCheckService.java << 'EOF'
-              import java.util.*;
-              import java.net.*;
-              import java.io.*;
-              import com.sun.net.httpserver.*;
-              
-              public class CreditCheckService {
-                  public static void main(String[] args) throws Exception {
-                      System.out.println("Starting Credit Check Service...");
-                      Thread.sleep(30000); // AppDynamics agent mount için bekle
-              
-                      HttpServer server = HttpServer.create(new InetSocketAddress(8082), 0);
-                      server.createContext("/api/credit/check", (exchange -> {
-                        
-                          try {
-                              URL url = new URL("http://wildcats-loan:8083/api/loans/apply");
-                              HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-                              conn.setRequestMethod("POST");
-                              conn.getResponseCode();
-                              conn.disconnect();
-                          } catch(Exception e) {
-                              System.out.println("Failed to call transaction service: " + e.getMessage());
-                          }
-              
-                          int score = (int)(Math.random() * 300) + 500;
-                          String response = "{\"creditScore\":" + score + ",\"approved\":" + (score > 650) + "}";
-                          exchange.getResponseHeaders().add("Content-Type", "application/json");
-                          exchange.sendResponseHeaders(200, response.length());
-                          exchange.getResponseBody().write(response.getBytes());
-                          exchange.close();
-                      }));
-                      server.createContext("/health", (exchange -> {
-                          exchange.getResponseHeaders().add("Content-Type", "text/plain");
-                          exchange.sendResponseHeaders(200, 2);
-                          exchange.getResponseBody().write("OK".getBytes());
-                          exchange.close();
-                      }));
-                      server.createContext("/actuator/health", (exchange -> {
-                          String response = "{\"status\":\"UP\"}";
-                          exchange.getResponseHeaders().add("Content-Type", "application/json");
-                          exchange.sendResponseHeaders(200, response.length());
-                          exchange.getResponseBody().write(response.getBytes());
-                          exchange.close();
-                      }));
-                      server.start();
-                      System.out.println("Credit Check Service running on 8082");
-              
-                      // Keep alive
-                      while(true) {
-                          Thread.sleep(10000);
-                      }
-                  }
-              }
-              EOF
-              javac CreditCheckService.java
-              java -Xms256m -Xmx512m CreditCheckService
+          image: odztech/wildcats-credit-check:1.0.0
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8082
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8082
-            initialDelaySeconds: 60
-            periodSeconds: 30
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8082
-            initialDelaySeconds: 45
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:MaxRAMPercentage=75.0 -XX:+UseContainerSupport -XX:+UseG1GC"
+          startupProbe:
+            httpGet: { path: /actuator/health, port: 8082 }
+            initialDelaySeconds: 20
             periodSeconds: 10
+            failureThreshold: 18
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8082 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8082 }
+            initialDelaySeconds: 60
+            periodSeconds: 20
           resources:
-            limits:
-              memory: "1Gi"
-              cpu: "1000m"
-            requests:
-              memory: "512Mi"
-              cpu: "200m"
+            requests: { cpu: "200m", memory: "512Mi" }
+            limits:   { cpu: "1000m", memory: "1Gi" }
 ---
 apiVersion: v1
 kind: Service
@@ -446,109 +105,164 @@ metadata:
   name: wildcats-credit-check
   namespace: appdynamics-demo
 spec:
-  selector:
-    app: wildcats-credit-check
+  selector: { app: wildcats-credit-check }
   ports:
     - port: 8082
+      targetPort: 8082
 ---
-# REPORT SERVICE
+# ============= LOAN (8083) =============
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wildcats-loan
+  namespace: appdynamics-demo
+  labels: { app: wildcats-loan }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: wildcats-loan }
+  template:
+    metadata:
+      labels: { app: wildcats-loan }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 1001
+      containers:
+        - name: app
+          image: odztech/wildcats-loan:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8083
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:MaxRAMPercentage=75.0 -XX:+UseContainerSupport -XX:+UseG1GC"
+          startupProbe:
+            httpGet: { path: /actuator/health, port: 8083 }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 18
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8083 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8083 }
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          resources:
+            requests: { cpu: "200m", memory: "512Mi" }
+            limits:   { cpu: "1000m", memory: "1Gi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wildcats-loan
+  namespace: appdynamics-demo
+spec:
+  selector: { app: wildcats-loan }
+  ports:
+    - port: 8083
+      targetPort: 8083
+---
+# ============= TRANSACTION (8084) =============
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wildcats-transaction
+  namespace: appdynamics-demo
+  labels: { app: wildcats-transaction }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: wildcats-transaction }
+  template:
+    metadata:
+      labels: { app: wildcats-transaction }
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 1001
+      containers:
+        - name: app
+          image: odztech/wildcats-transaction:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8084
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:MaxRAMPercentage=75.0 -XX:+UseContainerSupport -XX:+UseG1GC"
+          startupProbe:
+            httpGet: { path: /actuator/health, port: 8084 }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            failureThreshold: 18
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8084 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8084 }
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          resources:
+            requests: { cpu: "200m", memory: "512Mi" }
+            limits:   { cpu: "1000m", memory: "1Gi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wildcats-transaction
+  namespace: appdynamics-demo
+spec:
+  selector: { app: wildcats-transaction }
+  ports:
+    - port: 8084
+      targetPort: 8084
+---
+# ============= REPORT (8085) =============
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: wildcats-report
   namespace: appdynamics-demo
+  labels: { app: wildcats-report }
 spec:
   replicas: 2
   selector:
-    matchLabels:
-      app: wildcats-report
+    matchLabels: { app: wildcats-report }
   template:
     metadata:
-      labels:
-        app: wildcats-report
+      labels: { app: wildcats-report }
     spec:
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 1001
       containers:
         - name: app
-          image: openjdk:11-jdk
-          securityContext:
-            runAsUser: 0
-            runAsGroup: 0
-          command: ["/bin/sh"]
-          args:
-            - -c
-            - |
-              cat > ReportService.java << 'EOF'
-              import java.util.*;
-              import java.net.*;
-              import java.io.*;
-              import com.sun.net.httpserver.*;
-              
-              public class ReportService {
-                  public static void main(String[] args) throws Exception {
-                      System.out.println("Starting Report Service...");
-                      Thread.sleep(30000); // AppDynamics agent mount için bekle
-              
-                      HttpServer server = HttpServer.create(new InetSocketAddress(8085), 0);
-                      server.createContext("/api/reports/stats", (exchange -> {
-                          String response = "{\"totalTransactions\":" + (int)(Math.random()*1000) + ",\"totalLoans\":" + (int)(Math.random()*100) + "}";
-                          exchange.getResponseHeaders().add("Content-Type", "application/json");
-                          exchange.sendResponseHeaders(200, response.length());
-                          exchange.getResponseBody().write(response.getBytes());
-                          exchange.close();
-                      }));
-                      server.createContext("/api/reports/log", (exchange -> {
-                          String response = "{\"logged\":true}";
-                          exchange.getResponseHeaders().add("Content-Type", "application/json");
-                          exchange.sendResponseHeaders(200, response.length());
-                          exchange.getResponseBody().write(response.getBytes());
-                          exchange.close();
-                      }));
-                      server.createContext("/health", (exchange -> {
-                          exchange.getResponseHeaders().add("Content-Type", "text/plain");
-                          exchange.sendResponseHeaders(200, 2);
-                          exchange.getResponseBody().write("OK".getBytes());
-                          exchange.close();
-                      }));
-                      server.createContext("/actuator/health", (exchange -> {
-                          String response = "{\"status\":\"UP\"}";
-                          exchange.getResponseHeaders().add("Content-Type", "application/json");
-                          exchange.sendResponseHeaders(200, response.length());
-                          exchange.getResponseBody().write(response.getBytes());
-                          exchange.close();
-                      }));
-                      server.start();
-                      System.out.println("Report Service running on 8085");
-              
-                      // Keep alive
-                      while(true) {
-                          Thread.sleep(10000);
-                      }
-                  }
-              }
-              EOF
-              javac ReportService.java
-              java -Xms256m -Xmx512m ReportService
+          image: odztech/wildcats-report:1.0.0
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8085
-          livenessProbe:
-            httpGet:
-              path: /health
-              port: 8085
-            initialDelaySeconds: 60
-            periodSeconds: 30
-          readinessProbe:
-            httpGet:
-              path: /health
-              port: 8085
-            initialDelaySeconds: 45
+          env:
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:MaxRAMPercentage=75.0 -XX:+UseContainerSupport -XX:+UseG1GC"
+          startupProbe:
+            httpGet: { path: /actuator/health, port: 8085 }
+            initialDelaySeconds: 20
             periodSeconds: 10
+            failureThreshold: 18
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: 8085 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: 8085 }
+            initialDelaySeconds: 60
+            periodSeconds: 20
           resources:
-            limits:
-              memory: "1Gi"
-              cpu: "1000m"
-            requests:
-              memory: "512Mi"
-              cpu: "200m"
+            requests: { cpu: "200m", memory: "512Mi" }
+            limits:   { cpu: "1000m", memory: "1Gi" }
 ---
 apiVersion: v1
 kind: Service
@@ -556,7 +270,7 @@ metadata:
   name: wildcats-report
   namespace: appdynamics-demo
 spec:
-  selector:
-    app: wildcats-report
+  selector: { app: wildcats-report }
   ports:
     - port: 8085
+      targetPort: 8085
