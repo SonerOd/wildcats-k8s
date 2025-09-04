@@ -37,6 +37,17 @@ spec:
               
                       HttpServer server = HttpServer.create(new InetSocketAddress(8081), 0);
                       server.createContext("/api/accounts/create", (exchange -> {
+                          
+                           try {
+                              URL url = new URL("http://wildcats-credit-check:8082/api/credit/check");
+                              HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                              conn.setRequestMethod("POST");
+                              conn.getResponseCode();
+                              conn.disconnect();
+                          } catch(Exception e) {
+                              System.out.println("Failed to call transaction service: " + e.getMessage());
+                          }
+                          
                           String response = "{\"id\":\"" + UUID.randomUUID() + "\",\"status\":\"created\"}";
                           exchange.getResponseHeaders().add("Content-Type", "application/json");
                           exchange.sendResponseHeaders(200, response.length());
@@ -364,6 +375,17 @@ spec:
               
                       HttpServer server = HttpServer.create(new InetSocketAddress(8082), 0);
                       server.createContext("/api/credit/check", (exchange -> {
+                        
+                          try {
+                              URL url = new URL("http://wildcats-loan:8083/api/loans/apply");
+                              HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+                              conn.setRequestMethod("POST");
+                              conn.getResponseCode();
+                              conn.disconnect();
+                          } catch(Exception e) {
+                              System.out.println("Failed to call transaction service: " + e.getMessage());
+                          }
+              
                           int score = (int)(Math.random() * 300) + 500;
                           String response = "{\"creditScore\":" + score + ",\"approved\":" + (score > 650) + "}";
                           exchange.getResponseHeaders().add("Content-Type", "application/json");
