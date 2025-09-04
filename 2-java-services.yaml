@@ -13,9 +13,6 @@ spec:
     metadata:
       labels: { app: wildcats-account }
     spec:
-      securityContext:
-        runAsNonRoot: true
-        fsGroup: 1001
       containers:
         - name: app
           image: odztech/wildcats-account:1.0.0
@@ -70,9 +67,6 @@ spec:
     metadata:
       labels: { app: wildcats-credit-check }
     spec:
-      securityContext:
-        runAsNonRoot: true
-        fsGroup: 1001
       containers:
         - name: app
           image: odztech/wildcats-credit-check:1.0.0
@@ -125,9 +119,6 @@ spec:
     metadata:
       labels: { app: wildcats-loan }
     spec:
-      securityContext:
-        runAsNonRoot: true
-        fsGroup: 1001
       containers:
         - name: app
           image: odztech/wildcats-loan:1.0.0
@@ -180,9 +171,6 @@ spec:
     metadata:
       labels: { app: wildcats-transaction }
     spec:
-      securityContext:
-        runAsNonRoot: true
-        fsGroup: 1001
       containers:
         - name: app
           image: odztech/wildcats-transaction:1.0.0
@@ -235,9 +223,6 @@ spec:
     metadata:
       labels: { app: wildcats-report }
     spec:
-      securityContext:
-        runAsNonRoot: true
-        fsGroup: 1001
       containers:
         - name: app
           image: odztech/wildcats-report:1.0.0
