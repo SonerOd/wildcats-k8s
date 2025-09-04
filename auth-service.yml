@@ -2,6 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: wildcats-auth-service-code
+  namespace: appdynamics-demo
 data:
   server.js: |
     const express = require('express');
@@ -41,6 +42,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: wildcats-auth-service
+  namespace: appdynamics-demo
 spec:
   selector:
     matchLabels: { app: wildcats-auth-service }
@@ -77,6 +79,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: wildcats-auth-service
+  namespace: appdynamics-demo
 spec:
   selector: { app: wildcats-auth-service }
   ports:
