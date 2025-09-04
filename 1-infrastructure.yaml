@@ -22,6 +22,9 @@ spec:
       containers:
         - name: mongodb
           image: mongo:5.0
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
           env:
             - name: MONGO_INITDB_ROOT_USERNAME
               value: "admin"
@@ -60,6 +63,9 @@ spec:
       containers:
         - name: redis
           image: redis:7-alpine
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
           ports:
             - containerPort: 6379
 ---
@@ -93,6 +99,9 @@ spec:
       containers:
         - name: rabbitmq
           image: rabbitmq:3-management
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
           env:
             - name: RABBITMQ_DEFAULT_USER
               value: "admin"
@@ -136,6 +145,9 @@ spec:
         - name: keycloak
           image: quay.io/keycloak/keycloak:latest
           args: ["start-dev"]
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
           env:
             - name: KEYCLOAK_ADMIN
               value: "admin"
@@ -174,6 +186,9 @@ spec:
       containers:
         - name: camunda
           image: camunda/camunda-bpm-platform:latest
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
           ports:
             - containerPort: 8080
 ---

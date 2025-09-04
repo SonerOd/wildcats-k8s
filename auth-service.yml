@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: wildcats-auth-service-code
+data:
+  server.js: |
+    const express = require('express');
+    const axios = require('axios');
+    const app = express();
+    app.use(express.json());
+
+    const KEYCLOAK_URL = process.env.KEYCLOAK_URL || 'http://keycloak:8080';
+    const ACCOUNT_URL = process.env.ACCOUNT_URL || 'http://account:8080/api/v1/account/start';
+
+    async function getToken() {
+        try {
+            await axios.get(KEYCLOAK_URL, { timeout: 3000 });
+            return 'Bearer dummy.' + Date.now();
+        } catch (e) {
+            return 'Bearer dummy.' + Date.now();
+        }
+    }
+
+    app.post('/api/v1/start', async (req, res) => {
+        try {
+            const token = await getToken();
+            const payload = req.body && Object.keys(req.body).length ? req.body : { amount: 100.25, to: "TR-ACC-001" };
+            const r = await axios.post(ACCOUNT_URL, payload, { headers: { Authorization: token } });
+            res.status(201).json({ ok: true, from: 'auth', result: r.data });
+        } catch (e) {
+            res.status(500).json({ ok:false, error: e.toString() });
+        }
+    });
+
+    app.get('/health', (req,res)=> res.json({status:'ok'}));
+
+    app.listen(process.env.PORT || 3000, ()=> console.log('wildcats-auth-service up'));
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wildcats-auth-service
+spec:
+  selector:
+    matchLabels: { app: wildcats-auth-service }
+  template:
+    metadata:
+      labels: { app: wildcats-auth-service }
+    spec:
+      containers:
+        - name: auth
+          image: node:18-alpine
+          workingDir: /app
+          command: ["sh","-c"]
+          args:
+            - npm init -y && npm i express axios && node /app/server.js
+          env:
+            - name: KEYCLOAK_URL
+              value: "http://keycloak:8080"
+            - name: ACCOUNT_URL
+              value: "http://account:8081/api/accounts/create"
+            - name: PORT
+              value: "3000"
+          ports:
+            - containerPort: 3000
+          volumeMounts:
+            - name: code
+              mountPath: /app/server.js
+              subPath: server.js
+      volumes:
+        - name: code
+          configMap:
+            name: wildcats-auth-service-code
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: wildcats-auth-service
+spec:
+  selector: { app: wildcats-auth-service }
+  ports:
+    - port: 3000
+      targetPort: 3000
+      name: http

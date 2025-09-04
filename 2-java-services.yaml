@@ -2,21 +2,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: dummy-account-service
+  name: wildcats-account
   namespace: appdynamics-demo
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: dummy-account-service
+      app: wildcats-account
   template:
     metadata:
       labels:
-        app: dummy-account-service
+        app: wildcats-account
     spec:
       containers:
         - name: app
           image: openjdk:11
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
           command: ["/bin/sh"]
           args:
             - -c
@@ -54,11 +57,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: dummy-account-service
+  name: wildcats-account
   namespace: appdynamics-demo
 spec:
   selector:
-    app: dummy-account-service
+    app: wildcats-account
   ports:
     - port: 8081
 ---
@@ -66,21 +69,24 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: transaction-service
+  name: wildcats-transaction
   namespace: appdynamics-demo
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: transaction-service
+      app: wildcats-transaction
   template:
     metadata:
       labels:
-        app: transaction-service
+        app: wildcats-transaction
     spec:
       containers:
         - name: app
           image: openjdk:11
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
           command: ["/bin/sh"]
           args:
             - -c
@@ -124,11 +130,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: transaction-service
+  name: wildcats-transaction
   namespace: appdynamics-demo
 spec:
   selector:
-    app: transaction-service
+    app: wildcats-transaction
   ports:
     - port: 8084
 ---
@@ -136,21 +142,24 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: loan-service
+  name: wildcats-loan
   namespace: appdynamics-demo
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: loan-service
+      app: wildcats-loan
   template:
     metadata:
       labels:
-        app: loan-service
+        app: wildcats-loan
     spec:
       containers:
         - name: app
           image: openjdk:11
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
           command: ["/bin/sh"]
           args:
             - -c
@@ -167,7 +176,7 @@ spec:
                       server.createContext("/api/loans/apply", (exchange -> {
                           // Call transaction service
                           try {
-                              URL url = new URL("http://transaction-service:8084/api/transactions/create");
+                              URL url = new URL("http://wildcats-transaction-service:8084/api/transactions/creat
                               HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                               conn.setRequestMethod("POST");
                               conn.getResponseCode();
@@ -196,11 +205,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: loan-service
+  name: wildcats-loan
   namespace: appdynamics-demo
 spec:
   selector:
-    app: loan-service
+    app: wildcats-loan
   ports:
     - port: 8083
 ---
@@ -208,21 +217,24 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: credit-check-service
+  name: wildcats-credit-check
   namespace: appdynamics-demo
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: credit-check-service
+      app: wildcats-credit-check
   template:
     metadata:
       labels:
-        app: credit-check-service
+        app: wildcats-credit-check
     spec:
       containers:
         - name: app
           image: openjdk:11
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
           command: ["/bin/sh"]
           args:
             - -c
@@ -261,11 +273,11 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: credit-check-service
+  name: wildcats-credit-check
   namespace: appdynamics-demo
 spec:
   selector:
-    app: credit-check-service
+    app: wildcats-credit-check
   ports:
     - port: 8082
 ---
@@ -273,21 +285,24 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: report-service
+  name: wildcats-report
   namespace: appdynamics-demo
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: report-service
+      app: wildcats-report
   template:
     metadata:
       labels:
-        app: report-service
+        app: wildcats-report
     spec:
       containers:
         - name: app
           image: openjdk:11
+          securityContext:
+            runAsUser: 0
+            runAsGroup: 0
           command: ["/bin/sh"]
           args:
             - -c
@@ -331,10 +346,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: report-service
+  name: wildcats-report
   namespace: appdynamics-demo
 spec:
   selector:
-    app: report-service
+    app: wildcats-report
   ports:
     - port: 8085
