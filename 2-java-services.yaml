@@ -176,7 +176,7 @@ spec:
                       server.createContext("/api/loans/apply", (exchange -> {
                           // Call transaction service
                           try {
-                              URL url = new URL("http://wildcats-transaction-service:8084/api/transactions/creat
+                              URL url = new URL("http://wildcats-transaction:8084/api/transactions/create");
                               HttpURLConnection conn = (HttpURLConnection) url.openConnection();
                               conn.setRequestMethod("POST");
                               conn.getResponseCode();
