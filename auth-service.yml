@@ -61,7 +61,7 @@ spec:
             - name: KEYCLOAK_URL
               value: "http://keycloak:8080"
             - name: ACCOUNT_URL
-              value: "http://account:8081/api/accounts/create"
+              value: "http://wildcats-account:8081/api/accounts/create"
             - name: PORT
               value: "3000"
           ports:
