@@ -1,0 +1,107 @@
+# MOCK KAFKA SERVICE (BASIT HTTP SERVER)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-mock
+  namespace: appdynamics-demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-mock
+  template:
+    metadata:
+      labels:
+        app: kafka-mock
+    spec:
+      containers:
+        - name: app
+          image: openjdk:11
+          command: ["/bin/sh"]
+          args:
+            - -c
+            - |
+              cat > KafkaMock.java << 'EOF'
+              import java.net.*;
+              import java.io.*;
+              import com.sun.net.httpserver.*;
+              import java.util.*;
+              import java.util.concurrent.*;
+              
+              public class KafkaMock {
+                  static Map<String, List<String>> topics = new ConcurrentHashMap<>();
+              
+                  public static void main(String[] args) throws Exception {
+                      // Initialize topics
+                      topics.put("credit-checks", new ArrayList<>());
+                      topics.put("transactions", new ArrayList<>());
+                      topics.put("credit-responses", new ArrayList<>());
+              
+                      HttpServer server = HttpServer.create(new InetSocketAddress(9092), 0);
+              
+                      // Produce endpoint
+                      server.createContext("/produce", (exchange -> {
+                          String query = exchange.getRequestURI().getQuery();
+                          String topic = query != null ? query.split("=")[1] : "default";
+              
+                          String body = new String(exchange.getRequestBody().readAllBytes());
+                          topics.computeIfAbsent(topic, k -> new ArrayList<>()).add(body);
+              
+                          String response = "{\"success\":true,\"topic\":\"" + topic + "\"}";
+                          exchange.sendResponseHeaders(200, response.length());
+                          exchange.getResponseBody().write(response.getBytes());
+                          exchange.close();
+                          System.out.println("Produced to " + topic + ": " + body);
+                      }));
+              
+                      // Consume endpoint
+                      server.createContext("/consume", (exchange -> {
+                          String query = exchange.getRequestURI().getQuery();
+                          String topic = query != null ? query.split("=")[1] : "default";
+              
+                          List<String> messages = topics.getOrDefault(topic, new ArrayList<>());
+                          String response = messages.isEmpty() ? "[]" : "[\"" + String.join("\",\"", messages) + "\"]";
+              
+                          exchange.sendResponseHeaders(200, response.length());
+                          exchange.getResponseBody().write(response.getBytes());
+                          exchange.close();
+                      }));
+              
+                      // Health check
+                      server.createContext("/health", (exchange -> {
+                          exchange.sendResponseHeaders(200, 2);
+                          exchange.getResponseBody().write("OK".getBytes());
+                          exchange.close();
+                      }));
+              
+                      server.start();
+                      System.out.println("Mock Kafka running on 9092");
+                      System.out.println("Topics: credit-checks, transactions, credit-responses");
+              
+                      // Simulate periodic messages
+                      new Timer().scheduleAtFixedRate(new TimerTask() {
+                          public void run() {
+                              String msg = "{\"id\":\"" + UUID.randomUUID() + "\",\"timestamp\":" + System.currentTimeMillis() + "}";
+                              topics.get("credit-responses").add(msg);
+                              System.out.println("Auto-generated message in credit-responses");
+                          }
+                      }, 5000, 10000);
+                  }
+              }
+              EOF
+              javac KafkaMock.java
+              java KafkaMock
+          ports:
+            - containerPort: 9092
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka
+  namespace: appdynamics-demo
+spec:
+  selector:
+    app: kafka-mock
+  ports:
+    - port: 9092
+      targetPort: 9092
