@@ -1,0 +1,21 @@
+server:
+  port: 8082
+spring:
+  data:
+    redis:
+      host: redis
+      port: 6379
+  application:
+    name: wildcats-credit-check
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+services:
+  loan:
+    base-url: http://wildcats-loan:8083

@@ -1,0 +1,17 @@
+server:
+  port: 8081
+spring:
+  application:
+    name: wildcats-account
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true
+services:
+  credit-check:
+    base-url: http://wildcats-credit-check:8082
