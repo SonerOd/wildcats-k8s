@@ -69,7 +69,7 @@ spec:
     spec:
       containers:
         - name: app
-          image: odztech/wildcats-credit-check:1.0.0
+          image: odztech/wildcats-credit-check:1.0.1
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8082
@@ -173,7 +173,7 @@ spec:
     spec:
       containers:
         - name: app
-          image: odztech/wildcats-transaction:1.0.0
+          image: odztech/wildcats-transaction:1.0.1
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8084
@@ -225,7 +225,7 @@ spec:
     spec:
       containers:
         - name: app
-          image: odztech/wildcats-report:1.0.0
+          image: odztech/wildcats-report:1.0.1
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8085

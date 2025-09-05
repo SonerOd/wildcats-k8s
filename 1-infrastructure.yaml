@@ -21,15 +21,10 @@ spec:
     spec:
       containers:
         - name: mongodb
-          image: mongo:5.0
+          image: mongodb/mongodb-community-server:latest
           securityContext:
             runAsUser: 0
             runAsGroup: 0
-          env:
-            - name: MONGO_INITDB_ROOT_USERNAME
-              value: "admin"
-            - name: MONGO_INITDB_ROOT_PASSWORD
-              value: "password"
           ports:
             - containerPort: 27017
 ---
@@ -153,6 +148,14 @@ spec:
               value: "admin"
             - name: KEYCLOAK_ADMIN_PASSWORD
               value: "admin"
+            - name: KC_DB
+              value: postgres
+            - name: KC_DB_URL
+              value: jdbc:postgresql://postgresql-db:5432/keycloak
+            - name: KC_DB_USERNAME
+              value: keycloakuser
+            - name: KC_DB_PASSWORD
+              value: keycloakpassword
           ports:
             - containerPort: 8080
 ---
@@ -166,6 +169,52 @@ spec:
     app: keycloak
   ports:
     - port: 8080
+---
+# KEYCLOAK POSTGRES
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgresql-db
+spec:
+  serviceName: postgresql-db-service
+  selector:
+    matchLabels:
+      app: postgresql-db
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: postgresql-db
+    spec:
+      containers:
+        - name: postgresql-db
+          image: postgres:15
+          volumeMounts:
+            - mountPath: /data
+              name: cache-volume
+          env:
+            - name: POSTGRES_USER
+              value: keycloakuser
+            - name: POSTGRES_PASSWORD
+              value: keycloakpassword
+            - name: PGDATA
+              value: /data/pgdata
+            - name: POSTGRES_DB
+              value: keycloak
+      volumes:
+        - name: cache-volume
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres-db
+spec:
+  selector:
+    app: postgresql-db
+  ports:
+    - port: 5432
+      targetPort: 5432
 ---
 # CAMUNDA
 apiVersion: apps/v1
