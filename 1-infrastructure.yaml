@@ -151,7 +151,7 @@ spec:
             - name: KC_DB
               value: postgres
             - name: KC_DB_URL
-              value: jdbc:postgresql://postgresql-db:5432/keycloak
+              value: jdbc:postgresql://postgres-db:5432/keycloak
             - name: KC_DB_USERNAME
               value: keycloakuser
             - name: KC_DB_PASSWORD
