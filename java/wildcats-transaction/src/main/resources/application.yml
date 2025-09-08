@@ -1,6 +1,9 @@
 server:
   port: 8084
 spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.kafka.KafkaAutoConfiguration
   kafka:
     bootstrap-servers: kafka-service:9092
     producer:
@@ -30,3 +33,7 @@ management:
     health:
       probes:
         enabled: true
+logging:
+  level:
+    com.wildcats: DEBUG
+    org.springframework.kafka: INFO
