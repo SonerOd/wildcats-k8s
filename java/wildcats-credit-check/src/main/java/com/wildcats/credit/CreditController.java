@@ -34,13 +34,17 @@ public class CreditController {
         int score = rnd.nextInt(300) + 500;
         boolean approved = score > 650;
 
-        // Redis’ten XYZ oku
+        // Redis’ten XYZ oku, yoksa “no_data” yaz
         String xyzVal = redis.opsForValue().get("XYZ");
-        String xyzField = (xyzVal != null) ? "\"" + xyzVal + "\"" : "\"yoktur : )\"";
+        if (xyzVal == null) {
+            // appdynamics tespit etsin diye Redis’e dokunuyoruz
+            redis.opsForValue().set("XYZ", "no_data");
+            xyzVal = redis.opsForValue().get("XYZ");
+        }
 
         String body = String.format(
-                "{\"creditScore\":%d,\"approved\":%s,\"xyz\":%s}",
-                score, approved, xyzField
+                "{\"creditScore\":%d,\"approved\":%s,\"redVal\":\"%s\"}",
+                score, approved, xyzVal
         );
 
         return ResponseEntity.ok()
