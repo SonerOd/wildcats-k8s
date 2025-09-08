@@ -1,25 +1,17 @@
 package com.wildcats.tx.config;
 
 import org.apache.kafka.clients.admin.NewTopic;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.TopicBuilder;
-import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.kafka.core.ProducerFactory;
 
 @Configuration
 @EnableKafka
-@ConditionalOnProperty(
-        value = "spring.kafka.enabled",
-        havingValue = "true",
-        matchIfMissing = true
-)
-public class KafkaConfiguration {
+public class KafkaConfig {
 
     @Bean
-    public NewTopic transactionTopic() {
+    public NewTopic transactionEventsTopic() {
         return TopicBuilder.name("transaction-events")
                 .partitions(3)
                 .replicas(1)

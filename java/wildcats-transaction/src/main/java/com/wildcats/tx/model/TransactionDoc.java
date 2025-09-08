@@ -2,6 +2,7 @@ package com.wildcats.tx.model;
 
 import org.springframework.data.annotation.Id;
 import org.springframework.data.mongodb.core.mapping.Document;
+import org.springframework.data.mongodb.core.index.Indexed;
 import java.time.LocalDateTime;
 
 @Document(collection = "transactions")
@@ -9,7 +10,10 @@ public class TransactionDoc {
 
     @Id
     private String id;
+
+    @Indexed(unique = true, sparse = true)
     private String idempotencyKey;
+
     private double amount;
     private String status;
     private LocalDateTime createdAt;

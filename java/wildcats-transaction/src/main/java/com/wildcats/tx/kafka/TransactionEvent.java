@@ -1,16 +1,28 @@
 package com.wildcats.tx.kafka;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
 import java.time.LocalDateTime;
 
 public class TransactionEvent {
+
+    @JsonProperty("transactionId")
     private String transactionId;
+
+    @JsonProperty("idempotencyKey")
     private String idempotencyKey;
+
+    @JsonProperty("amount")
     private double amount;
+
+    @JsonProperty("status")
     private String status;
-    private String eventType; // CREATED, UPDATED, COMPLETED, FAILED
+
+    @JsonProperty("eventType")
+    private String eventType;
+
+    @JsonProperty("timestamp")
     private LocalDateTime timestamp;
 
-    // Constructors
     public TransactionEvent() {}
 
     public TransactionEvent(String transactionId, String idempotencyKey,

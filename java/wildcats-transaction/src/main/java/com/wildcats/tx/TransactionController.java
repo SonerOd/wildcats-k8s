@@ -23,10 +23,10 @@ public class TransactionController {
     private final TransactionProducer producer;
 
     @Autowired
-    public TransactionController(TransactionRepository repo,
-                                 @Autowired(required = false) TransactionProducer producer) {
+    public TransactionController(TransactionRepository repo, TransactionProducer producer) {
         this.repo = repo;
         this.producer = producer;
+        logger.info("TransactionController initialized with producer: {}", producer != null);
     }
 
     @PostMapping("/create")
@@ -34,142 +34,99 @@ public class TransactionController {
             @RequestHeader(value = "Idempotency-Key", required = false) String idemKey,
             @RequestBody(required = false) Map<String,Object> body) {
 
-        try {
-            double amount = (body != null && body.get("amount") instanceof Number)
-                    ? ((Number) body.get("amount")).doubleValue()
-                    : Math.random() * 10000;
+        double amount = (body != null && body.get("amount") instanceof Number)
+                ? ((Number) body.get("amount")).doubleValue()
+                : Math.random() * 10000;
 
-            if (idemKey != null && !idemKey.isBlank()) {
-                return repo.findByIdempotencyKey(idemKey)
-                        .<ResponseEntity<?>>map(ResponseEntity::ok)
-                        .orElseGet(() -> {
-                            TransactionDoc doc = createAndSaveTransaction(amount, idemKey);
-                            sendTransactionEvent(doc);
-                            return ResponseEntity.ok(doc);
-                        });
-            }
+        if (idemKey != null && !idemKey.isBlank()) {
+            return repo.findByIdempotencyKey(idemKey)
+                    .<ResponseEntity<?>>map(ResponseEntity::ok)
+                    .orElseGet(() -> {
+                        TransactionDoc doc = new TransactionDoc();
+                        doc.setAmount(amount);
+                        doc.setStatus("PENDING");
+                        doc.setIdempotencyKey(idemKey);
+                        TransactionDoc saved = repo.save(doc);
 
-            TransactionDoc doc = createAndSaveTransaction(amount, null);
-            sendTransactionEvent(doc);
-            return ResponseEntity.ok(doc);
+                        // Kafka'ya event gönder
+                        TransactionEvent event = new TransactionEvent(
+                                saved.getId(), saved.getIdempotencyKey(),
+                                saved.getAmount(), saved.getStatus(), "CREATED"
+                        );
+                        producer.sendTransactionEvent(event);
 
-        } catch (Exception e) {
-            logger.error("Error creating transaction", e);
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.internalServerError().body(error);
+                        return ResponseEntity.ok(saved);
+                    });
         }
+
+        TransactionDoc doc = new TransactionDoc();
+        doc.setAmount(amount);
+        doc.setStatus("PENDING");
+        TransactionDoc saved = repo.save(doc);
+
+        // Kafka'ya event gönder
+        TransactionEvent event = new TransactionEvent(
+                saved.getId(), saved.getIdempotencyKey(),
+                saved.getAmount(), saved.getStatus(), "CREATED"
+        );
+        producer.sendTransactionEvent(event);
+
+        return ResponseEntity.ok(saved);
     }
 
     @PostMapping("/{id}/process")
     public ResponseEntity<?> processTransaction(@PathVariable String id) {
-        try {
-            logger.info("Processing transaction with ID: {}", id);
+        logger.info("Processing transaction: {}", id);
 
-            return repo.findById(id)
-                    .map(transaction -> {
-                        logger.info("Found transaction: {}", transaction.getId());
+        return repo.findById(id)
+                .map(transaction -> {
+                    // Status güncelle
+                    transaction.setStatus("PROCESSING");
+                    repo.save(transaction);
 
-                        // Kafka producer yoksa sadece status güncelle
-                        if (producer == null) {
-                            logger.warn("Kafka producer is not available, updating status directly");
-                            transaction.setStatus("PROCESSING");
-                            repo.save(transaction);
+                    // Kafka'ya event gönder
+                    TransactionEvent event = new TransactionEvent(
+                            transaction.getId(),
+                            transaction.getIdempotencyKey(),
+                            transaction.getAmount(),
+                            "PROCESSING",
+                            "MANUAL_PROCESS"
+                    );
+                    producer.sendTransactionEvent(event);
 
-                            Map<String, String> response = new HashMap<>();
-                            response.put("message", "Transaction status updated (Kafka not available)");
-                            response.put("transactionId", transaction.getId());
-                            response.put("status", transaction.getStatus());
-                            return ResponseEntity.ok(response);
-                        }
+                    Map<String, Object> response = new HashMap<>();
+                    response.put("message", "Transaction processing initiated");
+                    response.put("transactionId", transaction.getId());
+                    response.put("status", transaction.getStatus());
 
-                        // Kafka producer varsa event gönder
-                        TransactionEvent event = new TransactionEvent(
-                                transaction.getId(),
-                                transaction.getIdempotencyKey(),
-                                transaction.getAmount(),
-                                "PROCESSING",
-                                "MANUAL_PROCESS"
-                        );
-
-                        producer.sendTransactionEvent(event);
-
-                        Map<String, String> response = new HashMap<>();
-                        response.put("message", "Transaction processing initiated");
-                        response.put("transactionId", transaction.getId());
-                        return ResponseEntity.ok(response);
-                    })
-                    .orElseGet(() -> {
-                        logger.warn("Transaction not found with ID: {}", id);
-                        Map<String, String> error = new HashMap<>();
-                        error.put("error", "Transaction not found");
-                        error.put("transactionId", id);
-                        return ResponseEntity.notFound().build();
-                    });
-
-        } catch (Exception e) {
-            logger.error("Error processing transaction with ID: " + id, e);
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            error.put("transactionId", id);
-            return ResponseEntity.internalServerError().body(error);
-        }
+                    return ResponseEntity.ok(response);
+                })
+                .orElse(ResponseEntity.notFound().build());
     }
 
     @GetMapping("/list")
     public ResponseEntity<?> list() {
-        try {
-            return ResponseEntity.ok(repo.findAll());
-        } catch (Exception e) {
-            logger.error("Error listing transactions", e);
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.internalServerError().body(error);
-        }
+        return ResponseEntity.ok(repo.findAll());
     }
 
     @GetMapping("/{id}")
     public ResponseEntity<?> getTransaction(@PathVariable String id) {
+        return repo.findById(id)
+                .<ResponseEntity<?>>map(ResponseEntity::ok)
+                .orElse(ResponseEntity.notFound().build());
+    }
+
+    @GetMapping("/health")
+    public ResponseEntity<?> health() {
+        Map<String, Object> status = new HashMap<>();
+        status.put("service", "UP");
+        status.put("kafka", "CONNECTED");
         try {
-            return repo.findById(id)
-                    .<ResponseEntity<?>>map(ResponseEntity::ok)
-                    .orElse(ResponseEntity.notFound().build());
+            status.put("mongodb_count", repo.count());
+            status.put("mongodb", "CONNECTED");
         } catch (Exception e) {
-            logger.error("Error getting transaction with ID: " + id, e);
-            Map<String, String> error = new HashMap<>();
-            error.put("error", e.getMessage());
-            return ResponseEntity.internalServerError().body(error);
+            status.put("mongodb", "ERROR: " + e.getMessage());
         }
-    }
-
-    private TransactionDoc createAndSaveTransaction(double amount, String idemKey) {
-        TransactionDoc doc = new TransactionDoc();
-        doc.setAmount(amount);
-        doc.setStatus("PENDING");
-        if (idemKey != null) {
-            doc.setIdempotencyKey(idemKey);
-        }
-        return repo.save(doc);
-    }
-
-    private void sendTransactionEvent(TransactionDoc doc) {
-        if (producer != null) {
-            try {
-                TransactionEvent event = new TransactionEvent(
-                        doc.getId(),
-                        doc.getIdempotencyKey(),
-                        doc.getAmount(),
-                        doc.getStatus(),
-                        "CREATED"
-                );
-                producer.sendTransactionEvent(event);
-                logger.info("Transaction event sent for ID: {}", doc.getId());
-            } catch (Exception e) {
-                logger.error("Failed to send transaction event for ID: " + doc.getId(), e);
-                // Event gönderilemese bile transaction'ı kaydet
-            }
-        } else {
-            logger.warn("Kafka producer is not available");
-        }
+        return ResponseEntity.ok(status);
     }
 }
