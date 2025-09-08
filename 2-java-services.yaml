@@ -69,8 +69,8 @@ spec:
     spec:
       containers:
         - name: app
-          image: odztech/wildcats-credit-check:1.0.1
-          imagePullPolicy: IfNotPresent
+          image: odztech/wildcats-credit-check:1.0.2
+          imagePullPolicy: Always
           ports:
             - containerPort: 8082
           env:
