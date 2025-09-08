@@ -1,6 +1,21 @@
 server:
   port: 8084
 spring:
+  kafka:
+    bootstrap-servers: kafka-service:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.trusted.packages: "*"
+    consumer:
+      group-id: transaction-service-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+        spring.json.type.mapping: "transaction:com.wildcats.tx.kafka.TransactionEvent"
+      auto-offset-reset: earliest
   data:
     mongodb:
       uri: mongodb://mongodb:27017/wildcats

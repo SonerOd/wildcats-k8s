@@ -173,8 +173,8 @@ spec:
     spec:
       containers:
         - name: app
-          image: odztech/wildcats-transaction:1.0.1
-          imagePullPolicy: IfNotPresent
+          image: odztech/wildcats-transaction:1.0.10
+          imagePullPolicy: Always
           ports:
             - containerPort: 8084
           env:
